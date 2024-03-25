@@ -1,71 +1,27 @@
-## Pycoral 🐚
 
-https://coral.ai/docs/accelerator/get-started/#2-install-the-pycoral-library
+## Running Edge TPU YOLO with RealSense Depth Camera D435i
 
+This repository extends the capabilities of the Edge TPU YOLO object detection model by integrating support for the RealSense Depth Camera D435i. This integration allows for the combination of high-accuracy object detection with depth sensing, enabling applications that require spatial awareness and precise object localization within the environment.
 
-```
-echo "deb https://packages.cloud.google.com/apt coral-edgetpu-stable main" | sudo tee /etc/apt/sources.list.d/coral-edgetpu.list
-curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
+### Key Features:
+- **Real-Time Object Detection**: Leverages the power of the Edge TPU to perform fast and accurate object detection in real-time video streams.
+- **Depth Sensing**: Utilizes the RealSense Depth Camera D435i to obtain depth information for each detected object, providing their distance from the camera.
+- **Spatial Awareness**: Enhances applications with the ability to understand the scene spatially, which is crucial for navigation, obstacle avoidance, and interactive projects.
 
-sudo apt-get update
+### Setup and Requirements:
+To use this repository, you will need:
+- A Google Coral Edge TPU device.
+- A RealSense Depth Camera D435i.
+- The latest version of the Edge TPU runtime and API libraries installed on your system.
+- The `pyrealsense2` library to interface with the RealSense camera.
 
-sudo apt-get install libedgetpu1-std
+### Quick Start Guide:
+1. **Connect Your Devices**: Ensure your Google Coral device and RealSense Depth Camera D435i are connected to your computer.
+2. **Install Dependencies**: Install the necessary libraries and dependencies as mentioned in the Setup section.
+3. **Run the Application**: Navigate to the repository's root directory and execute the provided script to start object detection with depth sensing:
+   ```shell
+   python3 detect.py
+   ```
+4. **View the Results**: The application will display the video feed with detected objects and their distances labeled in the output window.
 
-sudo apt-get install python3-pycoral
-```
-
-<br>
-
-## Setup 🔨
-
-```
-sudo apt-get update && sudo apt-get -y upgrade
-sudo apt-get install -y git curl gnupg
-
-
-## Get Python dependencies
-
-sudo apt-get install -y python3 python3-pip
-pip3 install --upgrade pip setuptools wheel
-
-
-## ERROR: launchpadlib 1.10.13 requires testresources, which is not installed. 에러 발생 시 아래 코드 수행
-
-// sudo apt install python3-testresources
-python3 -m pip install numpy
-python3 -m pip install opencv-python-headless
-python3 -m pip install tqdm pyyaml
-
-
-## Clone this repository
-
-git clone https://github.com/Kudos12th/kudos_edgetpu_yolo.git
-cd kudos_edgetpu_yolo
-```
-
-<br>
-
-## Run the test script
-
-1. roscore
-2. change default camera number
-    ```
-    sudo apt install v4l-utils
-    
-    v4l2-ctl --list-devices
-    
-    parser.add_argument("--device", type=int, default=0, help="Image capture device to run live detection")
-    ```
-4. coral
-5. detect
-    ```
-    python3 detect.py --model 3class_new-int8_edgetpu.tflite --stream
-    python3 detect.py --model 3class_new_saved_model --stream
-    ```
-
-
-<br>
-
-## Reference
-- https://github.com/jveitchmichaelis/edgetpu-yolo
-
+For detailed instructions on installation, configuration, and customization, please refer to the [Installation](#installation) and [Configuration](#configuration) sections below.

@@ -11,6 +11,8 @@ import cv2
 import json
 from utils import plot_one_box, Colors, get_image_tensor
 from geometry_msgs.msg import Twist
+from cv_bridge import CvBridge, CvBridgeError
+from sensor_msgs.msg import Image
 
 import tensorflow as tf
 gpus = tf.config.experimental.list_physical_devices('GPU')
@@ -19,16 +21,14 @@ if gpus:
 else:
     print("No GPUs found. Using CPU")
 
-
-no_ball_cnt = 0
-
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("TensorFlowModel")
-angle_pub = rospy.Publisher('move_tracking_Angle_pub', Twist, queue_size=1000)
-goal_pub = rospy.Publisher('goal_position_pub',Twist,queue_size=1000)
+# angle_pub = rospy.Publisher('move_tracking_Angle_pub', Twist, queue_size=1000)
+# goal_pub = rospy.Publisher('goal_position_pub',Twist,queue_size=1000)
 
 class TensorFlowModel:
     def __init__(self, model_path, names_file, conf_thresh=0.6, iou_thresh=0.45, filter_classes=None, agnostic_nms=False, max_det=1000):
+        # 기존 초기화 로직...
         """
         Creates an object for running a YOLOv5 model using TensorFlow
         
@@ -64,6 +64,25 @@ class TensorFlowModel:
         self.get_names(names_file)
         self.get_image_size()
     
+        self.bridge = CvBridge()
+        self.depth_image = None
+        rospy.Subscriber("/camera/depth/image_rect_raw", Image, self.depth_callback)
+
+
+    def depth_callback(self, data):
+        try:
+            cv_image = self.bridge.imgmsg_to_cv2(data, desired_encoding="passthrough")
+            self.depth_image = cv_image
+        except CvBridgeError as e:
+            print(e)
+
+    def get_depth(self, ball_xy):
+        if self.depth_image is not None and len(ball_xy) > 0:
+            #yx순서로 넣어야하는지??
+            depth_value = self.depth_image[int(ball_xy[1]), int(ball_xy[0])]
+            return depth_value
+
+
 
     def load_model(self):
         """
@@ -281,14 +300,15 @@ class TensorFlowModel:
 
         angle[0], angle[1] = m_PanAngle, m_TiltAngle  
         return angle , ball_xy
+
     
-    def goal_position_pub(self, det):
-        best_goal_det = max(det, key=lambda x: x[4])
-        best_goal_xy = [((best_goal_det[0] + best_goal_det[2]) / 2), ((best_goal_det[1] + best_goal_det[3]) / 2)]
-        twist = Twist()
-        twist.linear.x = best_goal_xy[0]
-        twist.linear.y = best_goal_xy[1]
-        goal_pub.publish(twist)
+    # def goal_position_pub(self, det):
+    #     best_goal_det = max(det, key=lambda x: x[4])
+    #     best_goal_xy = [((best_goal_det[0] + best_goal_det[2]) / 2), ((best_goal_det[1] + best_goal_det[3]) / 2)]
+    #     twist = Twist()
+    #     twist.linear.x = best_goal_xy[0]
+    #     twist.linear.y = best_goal_xy[1]
+    #     goal_pub.publish(twist)
 
     def process_predictions(self, det, output_image, pad, output_path="detection.jpg", save_img=True, save_txt=True, hide_labels=False, hide_conf=False):
         """
@@ -318,16 +338,17 @@ class TensorFlowModel:
             base, ext = os.path.splitext(output_path)
 
             if len(ball_det):
-                angle, ball_xy  = self.move_tracking(ball_det)
-                ball_distance = 55 * math.atan(angle[1]) #robot height
+                angle, ball_xy = self.move_tracking(ball_det)
+                # 공 중심 좌표로 깊이 측정
+                distance = self.get_depth(ball_xy)
+                ball_distance = distance 
                 twist.linear.x = ball_distance
-                ball_flag = 1  # yes_ball
+                ball_flag = 1
                 if len(foot_det) and (ball_xy[1] > 300):
-                    ball_flag = 2   # foot and ball
-                    print('**********flag = 2************')
+                    ball_flag = 2
 
-            if len(goal_det):
-                self.goal_position_pub(goal_det)
+            # if len(goal_det):
+            #     self.goal_position_pub(goal_det)
 
             s = ""
             for c in np.unique(det[:, -1]):
@@ -337,35 +358,38 @@ class TensorFlowModel:
                 s = s.strip()
                 s = s[:-1]
             logger.info("Detected: {}".format(s))
-            # Write results
+
             for *xyxy, conf, cls in reversed(det):
-                if save_img:  # Add bbox to image
-                    prev_time = time.time()
-                    c = int(cls)  # integer class
+                if save_img:
+                    c = int(cls)
                     label = None if hide_labels else (self.names[c] if hide_conf else f'{self.names[c]} {conf:.2f}')
                     output_image = plot_one_box(xyxy, output_image, label=label, color=self.colors(c, True))
+                    best_ball_det = max(det, key=lambda x: x[4])
+                    box_center_x = (best_ball_det[0] + best_ball_det[2]) / 2
+                    box_center_y = (best_ball_det[1] + best_ball_det[3]) / 2
+                    ball_xy = [box_center_x, box_center_y]
+                    distance = self.get_depth(ball_xy) / 1000
+                   # 깊이 정보를 화면에 표시
+                    cv2.putText(output_image, f"{distance:.2f}", (int(box_center_x), int(box_center_y) + 25), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255,0,0), 2)
+                    print('({},{}) distance = [{}]'.format(box_center_x, box_center_y,distance))
+
                 if save_txt:
-                    if xyxy[0]<640 and xyxy[1]<480:
-                        xyxy.append(conf)
-                        if self.names[c]=="ball":
-                            xyxy.append(1)        
+                    xyxy.append(conf)
                     output[base] = {}
                     output[base]['box'] = xyxy
                     output[base]['conf'] = conf
                     output[base]['cls'] = cls
                     output[base]['cls_name'] = self.names[c]
             if save_txt:
-                output_txt = base+"txt"
+                output_txt = base + ".txt"
                 with open(output_txt, 'w') as f:
-                   json.dump(output, f, indent=1)
+                    json.dump(output, f, indent=1)
             if save_img:
                 cv2.imwrite(output_path, output_image)
 
-        twist.angular.x = ball_flag
-        twist.angular.y = angle[0]
-        twist.angular.z = angle[1]
-        angle_pub.publish(twist)
+        # twist.angular.x = ball_flag
+        # twist.angular.y = angle[0]
+        # twist.angular.z = angle[1]
+        # angle_pub.publish(twist)
         cv2.imshow('Camera', output_image)
         cv2.waitKey(1)
-
-        return det,output_image, xyxy

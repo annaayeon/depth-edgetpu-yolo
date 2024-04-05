@@ -18,9 +18,9 @@ To use this repository, you will need:
 ### Quick Start Guide:
 1. **Connect Your Devices**: Ensure your Google Coral device and RealSense Depth Camera D435i are connected to your computer.
 2. **Install Dependencies**: Install the necessary libraries and dependencies as mentioned in the Setup section.
-3. **Run the Application**: Navigate to the repository's root directory and execute the provided script to start object detection with depth sensing:
+3. **Run the Application**: Navigate to the repository's root directory and execute the provided script to start object detection with depth sensing and live streaming:
    ```shell
-   python3 detect.py
+   python3 detect.py --model MODELNAME --stream
    ```
 4. **View the Results**: The application will display the video feed with detected objects and their distances labeled in the output window.
 
